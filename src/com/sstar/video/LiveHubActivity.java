@@ -105,7 +105,7 @@ public final class LiveHubActivity extends Activity {
         io.execute(()->{
           try {
             JSONObject row=new JSONObject(); row.put("host_id",api.userId); row.put("title",streamTitle);
-            row.put("description",""); row.put("status","live"); row.put("started_at",java.time.Instant.now().toString());
+            row.put("description",""); row.put("status","live");
             JSONObject result=api.request("POST","/rest/v1/live_streams",row,"return=representation");
             JSONArray data=result.optJSONArray("data");
             String id=data!=null&&data.length()>0?data.getJSONObject(0).optString("id"):"";
