@@ -1,0 +1,76 @@
+name: Extract S Android project
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'S-Android-MVP-Java-20261106.zip'
+      - '.github/workflows/extract-project.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract project files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import shutil
+
+          archive = Path("S-Android-MVP-Java-20261106.zip")
+          if not archive.is_file():
+              raise SystemExit("Project ZIP was not found")
+
+          temp = Path("/tmp/s-project-extract")
+          temp.mkdir(parents=True, exist_ok=True)
+          with ZipFile(archive) as z:
+              for item in z.infolist():
+                  name = Path(item.filename)
+                  if name.is_absolute() or ".." in name.parts:
+                      raise SystemExit(f"Unsafe archive path: {item.filename}")
+              z.extractall(temp)
+
+          entries = list(temp.iterdir())
+          source = entries[0] if len(entries) == 1 and entries[0].is_dir() else temp
+
+          excluded_names = {".git", ".gradle", "build", "local.properties"}
+          excluded_suffixes = {".jks", ".keystore"}
+          copied = 0
+          for src in source.rglob("*"):
+              if not src.is_file():
+                  continue
+              rel = src.relative_to(source)
+              if any(part in excluded_names for part in rel.parts):
+                  continue
+              if src.name.endswith(tuple(excluded_suffixes)):
+                  continue
+              if src.name in {"keystore.properties", "secrets.properties"}:
+                  continue
+              dst = Path(".") / rel
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src, dst)
+              copied += 1
+
+          if copied == 0:
+              raise SystemExit("No project files were extracted")
+          print(f"Extracted {copied} project files")
+          PY
+
+      - name: Commit extracted project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Extract S Android project from uploaded ZIP"
+            git push
+          else
+            echo "No extracted file changes to commit"
+          fi
