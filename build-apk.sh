@@ -13,7 +13,9 @@ rm -rf "$OUT" "$GEN" "$CLASSES" "$RES"; mkdir -p "$OUT" "$GEN" "$CLASSES" "$RES"
 "$BT/aapt2" compile --dir "$ROOT/res" -o "$RES/resources.zip"
 "$BT/aapt2" link -o "$OUT/base.apk" --manifest "$ROOT/AndroidManifest.xml" -I "$ANDROID_JAR" --java "$GEN" "$RES/resources.zip"
 find "$ROOT/src" "$GEN" -name '*.java' -print0 | xargs -0 javac -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$CLASSES"
-"$BT/d8" --lib "$ANDROID_JAR" --min-api 23 --output "$OUT" "$CLASSES"
+mapfile -d '' CLASS_FILES < <(find "$CLASSES" -type f -name '*.class' -print0)
+if [[ ${#CLASS_FILES[@]} -eq 0 ]]; then echo "ERROR: javac produced no .class files." >&2; exit 2; fi
+"$BT/d8" --lib "$ANDROID_JAR" --min-api 23 --output "$OUT" "${CLASS_FILES[@]}"
 (cd "$OUT" && zip -q -u base.apk classes.dex)
 "$BT/zipalign" -f 4 "$OUT/base.apk" "$OUT/aligned.apk"
 KEY="$ROOT/build/debug.keystore"
