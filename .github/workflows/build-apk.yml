@@ -3,12 +3,6 @@ name: Build S Android APK
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'res/**'
-      - 'AndroidManifest.xml'
-      - 'build-apk.sh'
-      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -25,27 +19,36 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
 
-      - name: Install Android platform and build tools
+      - name: Install Android platform
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "platforms;android-35" "build-tools;36.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Build and verify APK
+      - name: Build debug APK
+        run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify APK
         run: |
-          chmod +x ./build-apk.sh
-          ANDROID_HOME="$ANDROID_HOME" ANDROID_PLATFORM=android-35 BUILD_TOOLS_VERSION=36.0.0 ./build-apk.sh
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: S-debug-apk
-          path: build/out/S-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
