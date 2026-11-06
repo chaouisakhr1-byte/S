@@ -1,29 +1,28 @@
-# S ☆ — Native Android Java build
+# S ☆ — Native Android application
 
-This is a native Android rewrite scaffold for package `com.sstar.video`. It does not use Expo, React Native, Kotlin, Node.js, npm, or Gradle. Android UI and app logic are Java. Supabase is accessed through Android's built-in `HttpURLConnection` and REST endpoints.
+Existing application identity is preserved:
+- Package / application ID: `com.sstar.video`
+- Repository: `chaouisakhr1-byte/S`
+- Backend: the existing Supabase project configured in `Supabase.java`
 
-## Implemented in this Java revision
-- Email/password sign-in and sign-up against Supabase Auth REST API.
-- Persistent access token and user ID in Android SharedPreferences.
-- Public video feed retrieval from `public.videos`.
-- Video playback using Android `VideoView`.
-- Device video selection using Android document picker.
-- Upload to the `s-media` Supabase Storage bucket and insert video metadata.
-- Comment creation against `public.comments`.
-- Sign-out and basic profile/session screen.
+## Android build
 
-## Build without Gradle
-Install Android SDK Platform 35 and Build Tools 36.0.0, plus JDK 17 or 21. Then set `ANDROID_HOME` and run:
+The primary build is now the Android Gradle Plugin build in `app/`. Java sources remain in the existing `src/` tree, and the existing root `AndroidManifest.xml` and `res/` are used by the app module.
 
-```sh
-./build-apk.sh
-```
+GitHub Actions builds `:app:assembleDebug` and uploads `app-debug.apk`.
 
-The script uses `aapt2`, `javac`, `d8`, `zipalign`, `keytool`, and `apksigner` directly. It writes a debug-signed APK to `build/out/S-debug.apk`.
+## Current application areas
 
-## Important limits
-- This is the first Java-native conversion pass, not feature parity with the prior React Native project.
-- Live streaming transport (RTMP/RTMPS/WebRTC), guest co-hosting, real-time chat, creator follow/like UI, and profile editing are not implemented in this Java pass.
-- Sign-up may require email confirmation depending on Supabase Auth settings.
-- Supabase RLS and Storage policies must permit the signed-in user operations. Never embed a service-role key in the app; only the publishable client key is used.
-- No APK is included until the build script has been run successfully with Android SDK installed.
+- Supabase email/password authentication and persisted session.
+- Public video feed, local video picker, Supabase Storage upload and playback.
+- Video comments.
+- Creator follow and video likes using existing Supabase tables.
+- Profile editor.
+- Live Studio entry in the home screen.
+- RTMP camera publisher screen implemented with RootEncoder 2.8.1. It requests camera/microphone permission and publishes to a user-provided RTMP/RTMPS URL.
+
+## Important verification status
+
+A successful CI build proves compilation and APK packaging only. It does not prove camera compatibility on every phone, a successful connection to a real RTMP server, database policy compatibility, or production readiness. These require installation and live device/backend tests.
+
+The current RTMP screen is a direct publisher to an RTMP/RTMPS ingest URL. It does not yet provide a managed media server, automatic YouTube/Facebook account integration, multi-guest WebRTC rooms, or a full broadcast compositor.
