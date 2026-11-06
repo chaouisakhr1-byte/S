@@ -1,0 +1,47 @@
+name: Build S Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'res/**'
+      - 'AndroidManifest.xml'
+      - 'build-apk.sh'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "platforms;android-35" "build-tools;36.0.0"
+
+      - name: Build and verify APK
+        run: |
+          chmod +x ./build-apk.sh
+          ANDROID_HOME="$ANDROID_HOME" ANDROID_PLATFORM=android-35 BUILD_TOOLS_VERSION=36.0.0 ./build-apk.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-debug-apk
+          path: build/out/S-debug.apk
+          if-no-files-found: error
+          retention-days: 14
