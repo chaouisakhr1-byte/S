@@ -20,8 +20,83 @@ public class MainActivity extends Activity {
   protected void onActivityResult(int req,int res,Intent data){super.onActivityResult(req,res,data);if(req==PICK_VIDEO&&res==RESULT_OK&&data!=null&&data.getData()!=null){Uri uri=data.getData();getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);uploadVideo(uri);}}
   String displayName(Uri uri){try(Cursor c=getContentResolver().query(uri,null,null,null,null)){if(c!=null&&c.moveToFirst()){int n=c.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)return c.getString(n);}}return "video.mp4";}
   void uploadVideo(Uri uri){final EditText title=new EditText(this);title.setHint("Video title");new AlertDialog.Builder(this).setTitle("Name your video").setView(title).setNegativeButton("Cancel",null).setPositiveButton("Upload",(d,w)->{String name=title.getText().toString().trim();if(name.isEmpty())name=displayName(uri);final String t=name;status.setText("Uploading…");io.execute(()->{try{String path=api.userId+"/"+System.currentTimeMillis()+"_"+displayName(uri).replaceAll("[^A-Za-z0-9._-]","_");String publicUrl=api.upload(path,uri);JSONObject row=new JSONObject();row.put("owner_id",api.userId);row.put("title",t);row.put("description","");row.put("video_url",publicUrl);row.put("visibility","public");api.request("POST","/rest/v1/videos",row,"return=minimal");runOnUiThread(()->{status.setText("Upload complete");loadFeed();});}catch(Exception e){runOnUiThread(()->status.setText("Upload failed: "+e.getMessage()));}});}).show();}
-  void showComments(String videoId){if(!requireAuth())return;EditText input=new EditText(this);input.setHint("Write a comment");new AlertDialog.Builder(this).setTitle("Add comment").setView(input).setNegativeButton("Close",null).setPositiveButton("Send",(d,w)->{String body=input.getText().toString().trim();if(body.isEmpty())return;io.execute(()->{try{JSONObject row=new JSONObject();row.put("video_id",videoId);row.put("user_id",api.userId);row.put("body",body);api.request("POST","/rest/v1/comments",row,"return=minimal");runOnUiThread(()->Toast.makeText(this,"Comment sent",Toast.LENGTH_SHORT).show());}catch(Exception e){runOnUiThread(()->Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show());}});}).show();}
-  void showProfile(){base("Profile");content.addView(text("Signed in as\n"+api.email,18,dark));EditText display=new EditText(this);display.setHint("Display name");content.addView(display);EditText username=new EditText(this);username.setHint("Username");content.addView(username);EditText bio=new EditText(this);bio.setHint("Bio");content.addView(bio);Button save=button("Save profile");content.addView(save);save.setOnClickListener(v->{try{JSONObject row=new JSONObject();row.put("id",api.userId);row.put("display_name",display.getText().toString().trim());row.put("username",username.getText().toString().trim());row.put("bio",bio.getText().toString().trim());io.execute(()->{try{api.request("POST","/rest/v1/profiles",row,"resolution=merge-duplicates,return=minimal");runOnUiThread(()->Toast.makeText(this,"Profile saved",Toast.LENGTH_SHORT).show());}catch(Exception e){runOnUiThread(()->Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show());}});}catch(Exception e){}});Button out=button("Sign out");content.addView(out);out.setOnClickListener(v->{api.logout();showAuth();});}
+  void showComments(String videoId){
+    if(!requireAuth())return;
+    LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);
+    TextView messages=text("Loading comments…",14,dark);
+    ScrollView scroll=new ScrollView(this);scroll.addView(messages);
+    panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+    EditText input=new EditText(this);input.setHint("Write a comment");panel.addView(input);
+    AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Comments").setView(panel)
+      .setNegativeButton("Close",null).setPositiveButton("Send",null).create();
+    Runnable load=()->io.execute(()->{
+      try{
+        JSONObject result=api.request("GET","/rest/v1/comments?select=user_id,body,created_at&video_id=eq."+videoId+"&order=created_at.asc&limit=200",null,null);
+        JSONArray rows=result.optJSONArray("data");StringBuilder out=new StringBuilder();
+        if(rows!=null)for(int i=0;i<rows.length();i++){
+          JSONObject row=rows.optJSONObject(i);if(row==null)continue;
+          String uid=row.optString("user_id","user");
+          out.append(uid.substring(0,Math.min(8,uid.length()))).append(": ")
+            .append(row.optString("body","")).append("\\n\\n");
+        }
+        runOnUiThread(()->messages.setText(out.length()==0?"No comments yet. Be the first to comment.":out.toString()));
+      }catch(Exception ex){runOnUiThread(()->messages.setText("Could not load comments: "+ex.getMessage()));}
+    });
+    dialog.setOnShowListener(x->dialog.getButton(-1).setOnClickListener(v->{
+      String body=input.getText().toString().trim();if(body.isEmpty())return;
+      input.setText("");
+      io.execute(()->{
+        try{
+          JSONObject row=new JSONObject();row.put("video_id",videoId);row.put("user_id",api.userId);row.put("body",body);
+          api.request("POST","/rest/v1/comments",row,"return=minimal");
+          runOnUiThread(()->Toast.makeText(this,"Comment posted",Toast.LENGTH_SHORT).show());
+          load.run();
+        }catch(Exception ex){runOnUiThread(()->Toast.makeText(this,"Comment failed: "+ex.getMessage(),Toast.LENGTH_LONG).show());}
+      });
+    }));
+    dialog.show();load.run();
+  }
+  void showProfile(){
+    base("Profile");
+    content.addView(text("Your account",18,dark));
+    EditText display=new EditText(this);display.setHint("Display name");content.addView(display);
+    EditText username=new EditText(this);username.setHint("Username");content.addView(username);
+    EditText bio=new EditText(this);bio.setHint("Bio");content.addView(bio);
+    TextView profileStatus=text("Loading your saved profile…",13,dark);content.addView(profileStatus);
+    io.execute(()->{
+      try{
+        JSONObject result=api.request("GET","/rest/v1/profiles?select=username,display_name,bio&id=eq."+api.userId+"&limit=1",null,null);
+        JSONArray rows=result.optJSONArray("data");
+        JSONObject saved=rows!=null&&rows.length()>0?rows.optJSONObject(0):null;
+        runOnUiThread(()->{
+          if(saved!=null){
+            display.setText(saved.optString("display_name",""));
+            username.setText(saved.optString("username",""));
+            bio.setText(saved.optString("bio",""));
+            profileStatus.setText("Profile loaded");
+          }else profileStatus.setText("No profile saved yet. Complete the fields below.");
+        });
+      }catch(Exception ex){runOnUiThread(()->profileStatus.setText("Could not load profile: "+ex.getMessage()));}
+    });
+    Button save=button("Save profile");content.addView(save);
+    save.setOnClickListener(v->{
+      String handle=username.getText().toString().trim();
+      if(handle.isEmpty()){profileStatus.setText("Choose a username before saving.");return;}
+      try{
+        JSONObject row=new JSONObject();row.put("id",api.userId);
+        row.put("display_name",display.getText().toString().trim());
+        row.put("username",handle);row.put("bio",bio.getText().toString().trim());
+        profileStatus.setText("Saving profile…");
+        io.execute(()->{
+          try{
+            api.request("POST","/rest/v1/profiles",row,"resolution=merge-duplicates,return=minimal");
+            runOnUiThread(()->profileStatus.setText("Profile saved successfully."));
+          }catch(Exception ex){runOnUiThread(()->profileStatus.setText("Profile save failed: "+ex.getMessage()));}
+        });
+      }catch(Exception ex){profileStatus.setText("Invalid profile data.");}
+    });
+    Button out=button("Sign out");content.addView(out);out.setOnClickListener(v->{api.logout();showAuth();});
+  }
   void toggleFollow(String creatorId,Button b){if(!requireAuth())return;io.execute(()->{try{String q="/rest/v1/follows?follower_id=eq."+api.userId+"&followed_id=eq."+creatorId;JSONObject found=api.request("GET",q,null,null);JSONArray a=found.optJSONArray("data");if(a!=null&&a.length()>0){api.request("DELETE",q,null,null);runOnUiThread(()->b.setText("Follow creator"));}else{JSONObject row=new JSONObject();row.put("follower_id",api.userId);row.put("followed_id",creatorId);api.request("POST","/rest/v1/follows",row,"return=minimal");runOnUiThread(()->b.setText("Following"));}}catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Follow failed: "+e.getMessage(),Toast.LENGTH_LONG).show());}});}
   void toggleLike(String videoId,Button b){if(!requireAuth())return;io.execute(()->{try{String q="/rest/v1/video_likes?user_id=eq."+api.userId+"&video_id=eq."+videoId;JSONObject found=api.request("GET",q,null,null);JSONArray a=found.optJSONArray("data");if(a!=null&&a.length()>0){api.request("DELETE",q,null,null);runOnUiThread(()->b.setText("♥ Like"));}else{JSONObject row=new JSONObject();row.put("user_id",api.userId);row.put("video_id",videoId);api.request("POST","/rest/v1/video_likes",row,"return=minimal");runOnUiThread(()->b.setText("♥ Liked"));}}catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Like failed: "+e.getMessage(),Toast.LENGTH_LONG).show());}});}
   protected void onDestroy(){super.onDestroy();io.shutdown();}
