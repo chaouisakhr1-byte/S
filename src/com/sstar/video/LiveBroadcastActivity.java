@@ -99,5 +99,5 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
   @Override public void onDisconnect(){runOnUiThread(()->{state.setText("Disconnected");start.setText("Start broadcast");});}
   @Override public void onAuthError(){runOnUiThread(()->{state.setText("Streaming authentication failed");start.setText("Start broadcast");});}
   @Override public void onAuthSuccess(){runOnUiThread(()->state.setText("Streaming server authenticated"));}
-  @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(streamer!=null){if(streamer.isStreaming())streamer.stopStream();if(streamer.isOnPreview())streamer.stopPreview();streamer.release();streamer=null;}io.shutdown();super.onDestroy();}
+  @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(streamer!=null){if(streamer.isStreaming())streamer.stopStream();if(streamer.isOnPreview())streamer.stopPreview();streamer=null;}io.shutdown();super.onDestroy();}
 }
