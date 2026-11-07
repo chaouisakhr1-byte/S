@@ -15,10 +15,8 @@ public class MainActivity extends Activity {
       String verifier=android.util.Base64.encodeToString(random,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
       byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
       String challenge=android.util.Base64.encodeToString(digest,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
-      byte[] stateBytes=new byte[24];new java.security.SecureRandom().nextBytes(stateBytes);
-      String state=android.util.Base64.encodeToString(stateBytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
-      getSharedPreferences("s_oauth",0).edit().putString("pkce_verifier",verifier).putString("oauth_state",state).apply();
-      String url=Supabase.BASE+"/auth/v1/authorize?provider=google&redirect_to="+java.net.URLEncoder.encode(redirect,"UTF-8")+"&code_challenge="+java.net.URLEncoder.encode(challenge,"UTF-8")+"&code_challenge_method=S256&state="+java.net.URLEncoder.encode(state,"UTF-8")+"&apikey="+java.net.URLEncoder.encode(Supabase.KEY,"UTF-8");
+      getSharedPreferences("s_oauth",0).edit().putString("pkce_verifier",verifier).apply();
+      String url=Supabase.BASE+"/auth/v1/authorize?provider=google&redirect_to="+java.net.URLEncoder.encode(redirect,"UTF-8")+"&code_challenge="+java.net.URLEncoder.encode(challenge,"UTF-8")+"&code_challenge_method=S256&apikey="+java.net.URLEncoder.encode(Supabase.KEY,"UTF-8");
       startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
     }catch(Exception ex){showAuth();showAuthError("Could not start Google sign-in: "+ex.getMessage());}
   }
@@ -34,11 +32,6 @@ public class MainActivity extends Activity {
     String error=data.getQueryParameter("error_description");
     if(error==null)error=data.getQueryParameter("error");
     if(error!=null){showAuth();showAuthError("Google sign-in failed: "+error);return;}
-    String returnedState=data.getQueryParameter("state");
-    String expectedState=getSharedPreferences("s_oauth",0).getString("oauth_state","");
-    if(expectedState.isEmpty()||returnedState==null||!expectedState.equals(returnedState)){
-      showAuth();showAuthError("Google sign-in could not be verified. Please try again.");return;
-    }
     String code=data.getQueryParameter("code");
     if(code==null||code.isEmpty()){
       showAuth();showAuthError("Google did not return an authorization code.");return;
