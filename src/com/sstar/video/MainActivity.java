@@ -148,6 +148,31 @@ public class MainActivity extends Activity {
         });
       }catch(Exception ex){profileStatus.setText("Invalid profile data.");}
     });
+    content.addView(text("Your videos",18,dark));
+    TextView uploadsStatus=text("Loading your uploads…",13,dark);content.addView(uploadsStatus);
+    LinearLayout uploads=new LinearLayout(this);uploads.setOrientation(LinearLayout.VERTICAL);content.addView(uploads);
+    Button reloadUploads=button("Refresh my videos");content.addView(reloadUploads);
+    Runnable loadUploads=()->io.execute(()->{
+      try{
+        JSONObject result=api.request("GET","/rest/v1/videos?select=id,title,description,video_url,visibility,created_at&owner_id=eq."+api.userId+"&order=created_at.desc&limit=30",null,null);
+        JSONArray rows=result.optJSONArray("data");if(rows==null)rows=new JSONArray();
+        JSONArray finalRows=rows;
+        runOnUiThread(()->{
+          uploads.removeAllViews();uploadsStatus.setText(finalRows.length()+" uploaded video(s)");
+          if(finalRows.length()==0)uploads.addView(text("You have not uploaded a video yet.",14,dark));
+          for(int i=0;i<finalRows.length();i++){
+            JSONObject item=finalRows.optJSONObject(i);if(item==null)continue;
+            String title=item.optString("title","Video"),url=item.optString("video_url","");
+            String visibility=item.optString("visibility","public");
+            LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);row.setPadding(8,8,8,12);row.setBackgroundColor(Color.WHITE);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=8;uploads.addView(row,lp);
+            row.addView(text(title,16,dark));row.addView(text("Visibility: "+visibility,12,Color.GRAY));
+            if(!url.isEmpty()){Button play=button("Play");row.addView(play);play.setOnClickListener(v->{Intent intent=new Intent(this,VideoPlaybackActivity.class);intent.putExtra("url",url);intent.putExtra("title",title);startActivity(intent);});}
+          }
+        });
+      }catch(Exception ex){runOnUiThread(()->uploadsStatus.setText("Could not load your videos: "+ex.getMessage()));}
+    });
+    reloadUploads.setOnClickListener(v->loadUploads.run());loadUploads.run();
     Button out=button("Sign out");content.addView(out);out.setOnClickListener(v->{api.logout();showAuth();});
   }
   void toggleFollow(String creatorId,Button b){if(!requireAuth())return;io.execute(()->{try{String q="/rest/v1/follows?follower_id=eq."+api.userId+"&followed_id=eq."+creatorId;JSONObject found=api.request("GET",q,null,null);JSONArray a=found.optJSONArray("data");if(a!=null&&a.length()>0){api.request("DELETE",q,null,null);followedCreatorIds.remove(creatorId);runOnUiThread(()->b.setText("Follow creator"));}else{JSONObject row=new JSONObject();row.put("follower_id",api.userId);row.put("followed_id",creatorId);api.request("POST","/rest/v1/follows",row,"return=minimal");followedCreatorIds.add(creatorId);runOnUiThread(()->b.setText("Following"));}}catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Follow failed: "+e.getMessage(),Toast.LENGTH_LONG).show());}});}
