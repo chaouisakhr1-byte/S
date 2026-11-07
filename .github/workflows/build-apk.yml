@@ -76,7 +76,7 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"
           cp app/build/outputs/bundle/debug/app-debug.aab "$PKG/S/build-artifacts/S-debug.aab"
           git bundle create "$PKG/S/S-source-history.bundle" --all
-          sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/build-artifacts/S-debug.aab" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
+          (cd "$PKG/S" && sha256sum "build-artifacts/S-debug.apk" "build-artifacts/S-debug.aab" "S-source-history.bundle" > "SHA256SUMS")
           cat > "$PKG/S/DELIVERY-README.md" <<'EOF'
           # S project handoff
           This archive contains the complete tracked project source, Git history bundle, and the verified debug APK and debug AAB from this workflow run.
