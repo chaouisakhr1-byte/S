@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -52,3 +54,27 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Package complete source handoff
+        run: |
+          PKG="$RUNNER_TEMP/S-delivery"
+          mkdir -p "$PKG/S/build-artifacts"
+          tar --exclude='./.git' --exclude='./.gradle' --exclude='./build' --exclude='./app/build' -cf - . | tar -C "$PKG/S" -xf -
+          cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"
+          git bundle create "$PKG/S/S-source-history.bundle" --all
+          sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
+          cat > "$PKG/S/DELIVERY-README.md" <<'EOF'
+          # S project handoff
+          This archive contains the complete tracked project source, Git history bundle, and the verified debug APK from this workflow run.
+          The debug APK is for installation/testing, not a Play Store release.
+          Production release signing and device-level runtime tests must be completed separately.
+          EOF
+          (cd "$PKG" && zip -qr "$GITHUB_WORKSPACE/S-Full-Project-Debug.zip" S)
+
+      - name: Upload complete project ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: S-Full-Project-Debug
+          path: S-Full-Project-Debug.zip
+          if-no-files-found: error
+          retention-days: 30
