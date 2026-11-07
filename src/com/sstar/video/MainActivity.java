@@ -4,7 +4,7 @@ import android.app.*;import android.os.*;import android.content.*;import android
 import org.json.*;import java.util.concurrent.*;import java.io.*;
 
 public class MainActivity extends Activity {
-  final ExecutorService io=Executors.newSingleThreadExecutor(); Supabase api; LinearLayout root,content,bar; EditText email,password; TextView status; JSONArray videos=new JSONArray(); java.util.Map<String,String> creatorNames=new java.util.HashMap<>(); java.util.Set<String> likedVideoIds=new java.util.HashSet<>(), followedCreatorIds=new java.util.HashSet<>();
+  final ExecutorService io=Executors.newSingleThreadExecutor(); Supabase api; LinearLayout root,content,bar; TextView status; JSONArray videos=new JSONArray(); java.util.Map<String,String> creatorNames=new java.util.HashMap<>(); java.util.Set<String> likedVideoIds=new java.util.HashSet<>(), followedCreatorIds=new java.util.HashSet<>();
   static final int PICK_VIDEO=41; int dark=Color.rgb(22,24,29), accent=Color.rgb(110,76,255);
   public void onCreate(Bundle b){super.onCreate(b);api=new Supabase(this);getWindow().setStatusBarColor(dark);getWindow().setNavigationBarColor(dark);showHome();handleGoogleCallback(getIntent());}
   protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handleGoogleCallback(intent);}
@@ -43,29 +43,6 @@ public class MainActivity extends Activity {
   void base(String title){root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(Color.rgb(12,14,20));setContentView(root);LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(8,8,16,8);header.setBackgroundColor(Color.rgb(12,14,20));TextView brand=text("S",27,Color.WHITE);brand.setTypeface(null,Typeface.BOLD);header.addView(brand);TextView heading=text(title,17,Color.WHITE);heading.setTypeface(null,Typeface.BOLD);header.addView(heading);root.addView(header);ScrollView sc=new ScrollView(this);sc.setFillViewport(true);content=new LinearLayout(this);content.setPadding(16,14,16,24);content.setOrientation(1);content.setBackgroundColor(Color.rgb(245,246,250));sc.addView(content);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));}
   boolean requireAuth(){if(!api.accessToken.isEmpty())return true;new AlertDialog.Builder(this).setTitle("Sign in required").setMessage("Create an account or sign in to upload videos, go live, comment and follow creators. You can browse public videos without an account.").setNegativeButton("Later",null).setPositiveButton("Sign in",(d,w)->showAuth()).show();return false;}
   void showAuth(){base("Welcome to S");TextView intro=text("Sign in or create your account securely with Google.",16,dark);intro.setGravity(Gravity.CENTER);content.addView(intro);TextView logo=text("G",34,Color.rgb(66,133,244));logo.setTypeface(null,Typeface.BOLD);logo.setGravity(Gravity.CENTER);content.addView(logo);Button google=button("Continue with Google");google.setTextSize(16);google.setMinHeight(56);content.addView(google);google.setOnClickListener(v->startGoogleSignIn());status=text("",14,Color.RED);content.addView(status);Button browse=button("Browse without signing in");content.addView(browse);browse.setOnClickListener(v->showHome());}
-  void auth(boolean create){
-    String e=email.getText().toString().trim(),p=password.getText().toString();
-    if(e.isEmpty()||p.length()<6){status.setText("Enter a valid email and password (6+ characters).");return;}
-    status.setText("Connecting…");
-    io.execute(()->{
-      try{
-        JSONObject body=new JSONObject();body.put("email",e);body.put("password",p);
-        JSONObject result=api.request("POST",create?"/auth/v1/signup":"/auth/v1/token?grant_type=password",body,null);
-        JSONObject user=result.optJSONObject("user");if(user==null)user=result.optJSONObject("data");
-        String token=result.optString("access_token","");
-        String uid=user==null?"":user.optString("id","");
-        if(token.isEmpty()||uid.isEmpty()){
-          if(create){
-            runOnUiThread(()->status.setText("Account created. Confirm your email, then sign in."));
-            return;
-          }
-          throw new Exception("Sign-in did not return an active session. Check your email confirmation.");
-        }
-        api.save(token,uid,e,result.optString("refresh_token",""));
-        runOnUiThread(this::showHome);
-      }catch(Exception ex){runOnUiThread(()->status.setText(ex.getMessage()));}
-    });
-  }
   void showHome(){base("DISCOVER");status=text("Discover videos from the S community",13,Color.rgb(100,104,118));status.setBackgroundColor(Color.WHITE);root.addView(status);bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER);bar.setPadding(5,8,5,8);bar.setBackgroundColor(Color.WHITE);Button feed=navButton("⌂","Home"),upload=navButton("+","Create"),live=navButton("◉","Live"),profile=navButton("◎","Profile"),account=navButton("⋯",api.accessToken.isEmpty()?"Sign in":"Sign out");for(Button b:new Button[]{feed,upload,live,profile,account})bar.addView(b,new LinearLayout.LayoutParams(0,58,1));root.addView(bar);feed.setOnClickListener(v->loadFeed());upload.setOnClickListener(v->{if(requireAuth())pickVideo();});live.setOnClickListener(v->{if(requireAuth())startActivity(new Intent(this,LiveHubActivity.class));});profile.setOnClickListener(v->{if(requireAuth())showProfile();});account.setOnClickListener(v->{if(api.accessToken.isEmpty())showAuth();else{api.logout();showHome();}});loadFeed();}
   Button navButton(String icon,String label){Button b=new Button(this);b.setText(icon+"\n"+label);b.setTextSize(11);b.setTextColor(dark);b.setAllCaps(false);b.setPadding(2,2,2,2);b.setBackgroundColor(Color.TRANSPARENT);if(android.os.Build.VERSION.SDK_INT>=21)b.setStateListAnimator(null);return b;}
   void loadFeed(){status.setText("Loading feed…");io.execute(()->{try{
