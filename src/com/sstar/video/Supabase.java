@@ -43,7 +43,7 @@ final class Supabase {
     return new JSONObject(response);
   }
 
-  private boolean refreshSession() {
+  private synchronized boolean refreshSession() {
     HttpURLConnection c=null;
     try{
       JSONObject payload=new JSONObject();payload.put("refresh_token",refreshToken);
@@ -66,12 +66,24 @@ final class Supabase {
   }
 
   String upload(String objectPath, android.net.Uri uri) throws Exception {
-    String mime=context.getContentResolver().getType(uri); if(mime==null)mime="video/mp4";
-    HttpURLConnection c=(HttpURLConnection)new URL(BASE+"/storage/v1/object/s-media/"+encodePath(objectPath)).openConnection();
-    c.setRequestMethod("POST");c.setDoOutput(true);c.setConnectTimeout(20000);c.setReadTimeout(120000);c.setRequestProperty("apikey",KEY);c.setRequestProperty("Authorization","Bearer "+accessToken);c.setRequestProperty("Content-Type",mime);c.setRequestProperty("x-upsert","false");
-    try(InputStream in=context.getContentResolver().openInputStream(uri);OutputStream out=c.getOutputStream()){byte[] b=new byte[65536];int n;while((n=in.read(b))!=-1)out.write(b,0,n);}
-    int code=c.getResponseCode();String res=read(code>=200&&code<300?c.getInputStream():c.getErrorStream());c.disconnect();if(code<200||code>=300)throw new IOException("Upload HTTP "+code+": "+res);return BASE+"/storage/v1/object/public/s-media/"+objectPath;
+    return uploadInternal(objectPath,uri,true);
   }
+
+  private String uploadInternal(String objectPath,android.net.Uri uri,boolean allowRefresh) throws Exception {
+    String mime=context.getContentResolver().getType(uri);if(mime==null)mime="video/mp4";
+    HttpURLConnection c=(HttpURLConnection)new URL(BASE+"/storage/v1/object/s-media/"+encodePath(objectPath)).openConnection();
+    c.setRequestMethod("POST");c.setDoOutput(true);c.setConnectTimeout(20000);c.setReadTimeout(120000);
+    c.setRequestProperty("apikey",KEY);c.setRequestProperty("Authorization","Bearer "+accessToken);
+    c.setRequestProperty("Content-Type",mime);c.setRequestProperty("x-upsert","false");
+    try(InputStream in=context.getContentResolver().openInputStream(uri);OutputStream out=c.getOutputStream()){
+      byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
+    }
+    int code=c.getResponseCode();String response=read(code>=200&&code<300?c.getInputStream():c.getErrorStream());c.disconnect();
+    if(code==401&&allowRefresh&&!refreshToken.isEmpty()&&refreshSession())return uploadInternal(objectPath,uri,false);
+    if(code<200||code>=300)throw new IOException("Upload HTTP "+code+": "+response);
+    return BASE+"/storage/v1/object/public/s-media/"+encodePath(objectPath);
+  }
+
   static String encodePath(String path)throws Exception{String[] parts=path.split("/");StringBuilder out=new StringBuilder();for(int i=0;i<parts.length;i++){if(i>0)out.append("/");out.append(java.net.URLEncoder.encode(parts[i],"UTF-8").replace("+","%20"));}return out.toString();}
   static String read(InputStream in)throws Exception{if(in==null)return "";ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] x=new byte[8192];int n;while((n=in.read(x))!=-1)b.write(x,0,n);return b.toString("UTF-8");}
 }
