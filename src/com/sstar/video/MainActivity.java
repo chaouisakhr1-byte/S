@@ -11,30 +11,53 @@ public class MainActivity extends Activity {
   void startGoogleSignIn(){
     try{
       String redirect="com.sstar.video://auth/callback";
-      String url=Supabase.BASE+"/auth/v1/authorize?provider=google&redirect_to="+java.net.URLEncoder.encode(redirect,"UTF-8")+"&apikey="+java.net.URLEncoder.encode(Supabase.KEY,"UTF-8");
+      byte[] random=new byte[32];new java.security.SecureRandom().nextBytes(random);
+      String verifier=android.util.Base64.encodeToString(random,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
+      byte[] digest=java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+      String challenge=android.util.Base64.encodeToString(digest,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
+      byte[] stateBytes=new byte[24];new java.security.SecureRandom().nextBytes(stateBytes);
+      String state=android.util.Base64.encodeToString(stateBytes,android.util.Base64.URL_SAFE|android.util.Base64.NO_WRAP|android.util.Base64.NO_PADDING);
+      getSharedPreferences("s_oauth",0).edit().putString("pkce_verifier",verifier).putString("oauth_state",state).apply();
+      String url=Supabase.BASE+"/auth/v1/authorize?provider=google&redirect_to="+java.net.URLEncoder.encode(redirect,"UTF-8")+"&code_challenge="+java.net.URLEncoder.encode(challenge,"UTF-8")+"&code_challenge_method=S256&state="+java.net.URLEncoder.encode(state,"UTF-8")+"&apikey="+java.net.URLEncoder.encode(Supabase.KEY,"UTF-8");
       startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
-    }catch(Exception ex){if(status!=null)status.setText("Could not start Google sign-in: "+ex.getMessage());}
+    }catch(Exception ex){showAuth();showAuthError("Could not start Google sign-in: "+ex.getMessage());}
+  }
+  void showAuthError(String message){
+    if(status==null)return;
+    status.setText(message);
+    status.setTextColor(Color.rgb(190,35,45));
+    status.setVisibility(View.VISIBLE);
   }
   void handleGoogleCallback(Intent intent){
     Uri data=intent==null?null:intent.getData();
     if(data==null||!"com.sstar.video".equals(data.getScheme())||!"auth".equals(data.getHost()))return;
-    String fragment=data.getFragment();if(fragment==null)fragment="";
-    Uri values=Uri.parse("https://callback.invalid/?"+fragment);
-    String error=values.getQueryParameter("error_description");
-    if(error==null)error=values.getQueryParameter("error");
-    if(error!=null){showAuth();status.setText("Google sign-in failed: "+error);return;}
-    String token=values.getQueryParameter("access_token"),refresh=values.getQueryParameter("refresh_token");
-    if(token==null||token.isEmpty()){showAuth();status.setText("Google did not return a session. Check OAuth configuration.");return;}
-    api.accessToken=token;
-    status=text("Finishing Google sign-in…",14,Color.DKGRAY);
+    String error=data.getQueryParameter("error_description");
+    if(error==null)error=data.getQueryParameter("error");
+    if(error!=null){showAuth();showAuthError("Google sign-in failed: "+error);return;}
+    String returnedState=data.getQueryParameter("state");
+    String expectedState=getSharedPreferences("s_oauth",0).getString("oauth_state","");
+    if(expectedState.isEmpty()||returnedState==null||!expectedState.equals(returnedState)){
+      showAuth();showAuthError("Google sign-in could not be verified. Please try again.");return;
+    }
+    String code=data.getQueryParameter("code");
+    if(code==null||code.isEmpty()){
+      showAuth();showAuthError("Google did not return an authorization code.");return;
+    }
+    String verifier=getSharedPreferences("s_oauth",0).getString("pkce_verifier","");
+    if(verifier.isEmpty()){showAuth();showAuthError("The secure sign-in session expired. Please try again.");return;}
+    showAuth();status.setText("Finishing Google sign-in…");status.setTextColor(Color.DKGRAY);status.setVisibility(View.VISIBLE);
     io.execute(()->{
       try{
-        JSONObject user=api.request("GET","/auth/v1/user",null,null);
-        String uid=user.optString("id",""),mail=user.optString("email","");
-        if(uid.isEmpty())throw new Exception("Supabase did not return a user ID.");
-        api.save(token,uid,mail,refresh==null?"":refresh);
+        JSONObject payload=new JSONObject();payload.put("auth_code",code);payload.put("code_verifier",verifier);
+        JSONObject session=api.request("POST","/auth/v1/token?grant_type=pkce",payload,null);
+        String token=session.optString("access_token",""),refresh=session.optString("refresh_token","");
+        JSONObject user=session.optJSONObject("user");
+        String uid=user==null?"":user.optString("id",""),mail=user==null?"":user.optString("email","");
+        if(token.isEmpty()||uid.isEmpty())throw new Exception("Supabase did not return a valid user session.");
+        api.save(token,uid,mail,refresh);
+        getSharedPreferences("s_oauth",0).edit().clear().apply();
         runOnUiThread(this::showHome);
-      }catch(Exception ex){runOnUiThread(()->{showAuth();status.setText("Google sign-in could not be completed: "+ex.getMessage());});}
+      }catch(Exception ex){runOnUiThread(()->{showAuth();showAuthError("Google sign-in could not be completed: "+ex.getMessage());});}
     });
   }
   GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
@@ -55,7 +78,7 @@ public class MainActivity extends Activity {
     Button google=button("Continue with Google");google.setTextSize(16);google.setMinHeight(56);
     LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,-2);gp.topMargin=24;panel.addView(google,gp);
     google.setOnClickListener(v->startGoogleSignIn());
-    status=text("",14,Color.RED);status.setGravity(Gravity.CENTER);panel.addView(status);
+    status=text("",14,Color.RED);status.setGravity(Gravity.CENTER);status.setVisibility(View.GONE);panel.addView(status);
     content.addView(panel,new LinearLayout.LayoutParams(-1,-2));
   }
   void showHome(){base("DISCOVER");status=text("Discover videos from the S community",13,Color.rgb(100,104,118));status.setBackgroundColor(Color.WHITE);root.addView(status);bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER);bar.setPadding(5,8,5,8);bar.setBackgroundColor(Color.WHITE);Button feed=navButton("⌂","Home"),upload=navButton("+","Create"),live=navButton("◉","Live"),profile=navButton("◎","Profile"),account=navButton("⋯",api.accessToken.isEmpty()?"Sign in":"Sign out");for(Button b:new Button[]{feed,upload,live,profile,account})bar.addView(b,new LinearLayout.LayoutParams(0,58,1));root.addView(bar);feed.setOnClickListener(v->loadFeed());upload.setOnClickListener(v->{if(requireAuth())pickVideo();});live.setOnClickListener(v->{if(requireAuth())startActivity(new Intent(this,LiveHubActivity.class));});profile.setOnClickListener(v->{if(requireAuth())showProfile();});account.setOnClickListener(v->{if(api.accessToken.isEmpty())showAuth();else{api.logout();showHome();}});loadFeed();}
