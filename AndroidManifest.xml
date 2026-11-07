@@ -4,7 +4,13 @@
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
   <application android:label="S" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:allowBackup="false">
-    <activity android:name=".VideoPlaybackActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".LiveHubActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".LiveBroadcastActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+    <activity android:name=".VideoPlaybackActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".LiveHubActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".LiveBroadcastActivity" android:screenOrientation="portrait" android:exported="false" /><activity android:name=".MainActivity" android:screenOrientation="portrait" android:launchMode="singleTop" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="com.sstar.video" android:host="auth" android:path="/callback"/>
+      </intent-filter>
       <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
     </activity>
   </application>
