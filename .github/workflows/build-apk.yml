@@ -74,8 +74,8 @@ jobs:
           sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/build-artifacts/S-debug.aab" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
           cat > "$PKG/S/DELIVERY-README.md" <<'EOF'
           # S project handoff
-          This archive contains the complete tracked project source, Git history bundle, and the verified debug APK from this workflow run.
-          The debug APK is for installation/testing, not a Play Store release.
+          This archive contains the complete tracked project source, Git history bundle, and the verified debug APK and debug AAB from this workflow run.
+          Both Android artifacts are signed with the debug key for testing only; they are not Play Store release artifacts.
           Production release signing and device-level runtime tests must be completed separately.
           EOF
           (cd "$PKG" && zip -qr "$GITHUB_WORKSPACE/S-Full-Project-Debug.zip" S)
