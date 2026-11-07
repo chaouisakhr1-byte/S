@@ -6,13 +6,43 @@ import org.json.*;import java.util.concurrent.*;import java.io.*;
 public class MainActivity extends Activity {
   final ExecutorService io=Executors.newSingleThreadExecutor(); Supabase api; LinearLayout root,content,bar; EditText email,password; TextView status; JSONArray videos=new JSONArray(); java.util.Map<String,String> creatorNames=new java.util.HashMap<>(); java.util.Set<String> likedVideoIds=new java.util.HashSet<>(), followedCreatorIds=new java.util.HashSet<>();
   static final int PICK_VIDEO=41; int dark=Color.rgb(22,24,29), accent=Color.rgb(110,76,255);
-  public void onCreate(Bundle b){super.onCreate(b);api=new Supabase(this);getWindow().setStatusBarColor(dark);getWindow().setNavigationBarColor(dark);showHome();}
+  public void onCreate(Bundle b){super.onCreate(b);api=new Supabase(this);getWindow().setStatusBarColor(dark);getWindow().setNavigationBarColor(dark);showHome();handleGoogleCallback(getIntent());}
+  protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handleGoogleCallback(intent);}
+  void startGoogleSignIn(){
+    try{
+      String redirect="com.sstar.video://auth/callback";
+      String url=Supabase.BASE+"/auth/v1/authorize?provider=google&redirect_to="+java.net.URLEncoder.encode(redirect,"UTF-8")+"&apikey="+java.net.URLEncoder.encode(Supabase.KEY,"UTF-8");
+      startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
+    }catch(Exception ex){if(status!=null)status.setText("Could not start Google sign-in: "+ex.getMessage());}
+  }
+  void handleGoogleCallback(Intent intent){
+    Uri data=intent==null?null:intent.getData();
+    if(data==null||!"com.sstar.video".equals(data.getScheme())||!"auth".equals(data.getHost()))return;
+    String fragment=data.getFragment();if(fragment==null)fragment="";
+    Uri values=Uri.parse("https://callback.invalid/?"+fragment);
+    String error=values.getQueryParameter("error_description");
+    if(error==null)error=values.getQueryParameter("error");
+    if(error!=null){showAuth();status.setText("Google sign-in failed: "+error);return;}
+    String token=values.getQueryParameter("access_token"),refresh=values.getQueryParameter("refresh_token");
+    if(token==null||token.isEmpty()){showAuth();status.setText("Google did not return a session. Check OAuth configuration.");return;}
+    api.accessToken=token;
+    status=text("Finishing Google sign-in…",14,Color.DKGRAY);
+    io.execute(()->{
+      try{
+        JSONObject user=api.request("GET","/auth/v1/user",null,null);
+        String uid=user.optString("id",""),mail=user.optString("email","");
+        if(uid.isEmpty())throw new Exception("Supabase did not return a user ID.");
+        api.save(token,uid,mail,refresh==null?"":refresh);
+        runOnUiThread(this::showHome);
+      }catch(Exception ex){runOnUiThread(()->{showAuth();status.setText("Google sign-in could not be completed: "+ex.getMessage());});}
+    });
+  }
   GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(radius);return d;}
   TextView text(String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setPadding(12,10,12,10);return t;}
   Button button(String s){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(13);b.setMinHeight(44);b.setPadding(14,4,14,4);b.setBackground(shape(accent,24));if(android.os.Build.VERSION.SDK_INT>=21)b.setStateListAnimator(null);return b;}
   void base(String title){root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(Color.rgb(12,14,20));setContentView(root);LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(8,8,16,8);header.setBackgroundColor(Color.rgb(12,14,20));TextView brand=text("S",27,Color.WHITE);brand.setTypeface(null,Typeface.BOLD);header.addView(brand);TextView heading=text(title,17,Color.WHITE);heading.setTypeface(null,Typeface.BOLD);header.addView(heading);root.addView(header);ScrollView sc=new ScrollView(this);sc.setFillViewport(true);content=new LinearLayout(this);content.setPadding(16,14,16,24);content.setOrientation(1);content.setBackgroundColor(Color.rgb(245,246,250));sc.addView(content);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));}
   boolean requireAuth(){if(!api.accessToken.isEmpty())return true;new AlertDialog.Builder(this).setTitle("Sign in required").setMessage("Create an account or sign in to upload videos, go live, comment and follow creators. You can browse public videos without an account.").setNegativeButton("Later",null).setPositiveButton("Sign in",(d,w)->showAuth()).show();return false;}
-  void showAuth(){base("S ☆");content.addView(text("Connect with your community",18,dark));email=new EditText(this);email.setHint("Email");email.setInputType(33);content.addView(email);password=new EditText(this);password.setHint("Password");password.setInputType(129);content.addView(password);Button login=button("Sign in");content.addView(login);Button signup=button("Create account");content.addView(signup);status=text("",14,Color.RED);content.addView(status);login.setOnClickListener(v->auth(false));signup.setOnClickListener(v->auth(true));Button browse=button("Continue browsing public videos");content.addView(browse);browse.setOnClickListener(v->showHome());}
+  void showAuth(){base("Welcome to S");TextView intro=text("Sign in or create your account securely with Google.",16,dark);intro.setGravity(Gravity.CENTER);content.addView(intro);TextView logo=text("G",34,Color.rgb(66,133,244));logo.setTypeface(null,Typeface.BOLD);logo.setGravity(Gravity.CENTER);content.addView(logo);Button google=button("Continue with Google");google.setTextSize(16);google.setMinHeight(56);content.addView(google);google.setOnClickListener(v->startGoogleSignIn());status=text("",14,Color.RED);content.addView(status);Button browse=button("Browse without signing in");content.addView(browse);browse.setOnClickListener(v->showHome());}
   void auth(boolean create){
     String e=email.getText().toString().trim(),p=password.getText().toString();
     if(e.isEmpty()||p.length()<6){status.setText("Enter a valid email and password (6+ characters).");return;}
