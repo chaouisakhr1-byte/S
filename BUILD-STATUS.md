@@ -11,12 +11,13 @@
 - Supabase email/password sign-up and sign-in, including the email-confirmation case.
 - Persisted access and refresh tokens; refresh token renewal after HTTP 401.
 - Public video feed and local video picker.
-- Upload to public `s-media` Storage bucket (50 MiB configured limit).
+- Upload to public `s-media` Storage bucket (50 MiB configured limit), with client-side size and MIME checks.
 - Public video playback.
 - Load and post comments.
-- Video like and creator follow actions.
+- Video likes and creator follows, with existing state restored in the feed.
+- Creator names and a personal uploads list in the profile.
 - Load and save profile data.
-- Live Hub discovery for live sessions and host-owned scheduled sessions.
+- Live Hub discovery for live sessions and host-owned scheduled sessions, including resume-studio action.
 - Resume a host's scheduled live studio.
 - RTMP/RTMPS publishing using RootEncoder 2.8.1.
 - Runtime camera/microphone permission requests.
@@ -30,7 +31,11 @@
 - Storage INSERT and DELETE policies scope objects to the authenticated user's UID folder.
 - The app uses a publishable key only. No service-role key is shipped in the Android client.
 
-## Latest successful CI build before documentation-only updates
+## Current app version
+- Version name: `0.3.0`
+- Version code: `3`
+
+## Latest successful CI build before the latest code updates
 - Workflow run: `42315862778` (run #36).
 - Commit: `59ec98b93f1fa4a3b5e2a26cb6b1b48417d23433`.
 - APK build and apksigner verification: passed.
