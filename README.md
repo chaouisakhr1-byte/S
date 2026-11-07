@@ -10,10 +10,11 @@
 - Email/password Supabase sign-up and sign-in, including the email-confirmation response.
 - Persisted access/refresh tokens and refresh-token renewal after an expired access token.
 - Public video feed and local video selection.
-- Upload to the existing public `s-media` bucket (currently limited to 50 MiB and its configured video MIME types).
+- Upload to the existing public `s-media` bucket (currently limited to 50 MiB and its configured video MIME types); the app validates the limit and supported formats before upload.
 - Public video playback.
-- Read and post comments on public videos.
-- Video likes and creator follows.
+- Read and post comments on public videos (reading is available to guests; posting requires sign-in).
+- Video likes and creator follows, with the viewer's existing state restored when the feed loads.
+- Creator display names in the public feed and a personal uploads list in the profile.
 - Profile loading and saving.
 - Live Hub listing of public live sessions and the signed-in host's scheduled sessions.
 - Resume a host's scheduled studio session.
@@ -27,6 +28,10 @@
 - Storage bucket `s-media` is public, accepts configured video MIME types, and has a 50 MiB upload limit.
 - Storage upload/delete policies restrict each authenticated user to their own UID folder.
 - This Android client uses the publishable key only; never add a service-role key to the app.
+
+## Current app version
+- Version name: `0.3.0`
+- Version code: `3`
 
 ## Build and artifacts
 GitHub Actions runs:
