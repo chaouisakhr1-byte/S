@@ -19,7 +19,7 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
   private final ExecutorService io=Executors.newSingleThreadExecutor();
   private final Handler handler=new Handler(Looper.getMainLooper());
   private Supabase api; private String streamId="",streamTitle="S Live";
-  private RtmpCamera1 streamer; private SurfaceView preview; private EditText streamUrl;
+  private RtmpCamera1 streamer; private SurfaceView preview; private EditText streamUrl, playbackUrl;
   private TextView state; private Button start; private boolean surfaceReady=false, finishingStream=false;
   private static final int DARK=Color.rgb(18,20,27);
 
@@ -31,6 +31,7 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
     TextView heading=new TextView(this); heading.setText("S · LIVE STUDIO\n"+streamTitle); heading.setTextColor(Color.WHITE); heading.setTextSize(20); root.addView(heading);
     preview=new SurfaceView(this); preview.getHolder().addCallback(this); root.addView(preview,new LinearLayout.LayoutParams(-1,0,1));
     streamUrl=new EditText(this); streamUrl.setSingleLine(true); streamUrl.setTextColor(Color.WHITE); streamUrl.setHintTextColor(Color.LTGRAY); streamUrl.setHint("RTMP/RTMPS publishing URL"); root.addView(streamUrl);
+    playbackUrl=new EditText(this); playbackUrl.setSingleLine(true); playbackUrl.setTextColor(Color.WHITE); playbackUrl.setHintTextColor(Color.LTGRAY); playbackUrl.setHint("Public HLS playback URL (optional)"); root.addView(playbackUrl);
     state=new TextView(this); state.setTextColor(Color.WHITE); state.setText("Allow camera and microphone to prepare your studio."); root.addView(state);
     LinearLayout controls=new LinearLayout(this);
     start=new Button(this); start.setText("Start broadcast");
@@ -87,14 +88,28 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
   }
   private void endLive(){
     if(streamer!=null){if(streamer.isStreaming())streamer.stopStream();if(streamer.isOnPreview())streamer.stopPreview();}
-    if(!streamId.isEmpty()&&!finishingStream){finishingStream=true;io.execute(()->{try{JSONObject row=new JSONObject();row.put("status","ended");api.request("PATCH","/rest/v1/live_streams?id=eq."+streamId,row,"return=minimal");}catch(Exception ignored){}runOnUiThread(this::finish);});}
+    if(!streamId.isEmpty()&&!finishingStream){finishingStream=true;io.execute(()->{try{JSONObject row=new JSONObject();row.put("status","ended");row.put("ended_at",utcNow());api.request("PATCH","/rest/v1/live_streams?id=eq."+streamId,row,"return=minimal");}catch(Exception ignored){}runOnUiThread(this::finish);});}
     else finish();
   }
   @Override public void surfaceCreated(SurfaceHolder holder){surfaceReady=true;if(streamer!=null&&!streamer.isOnPreview())streamer.startPreview();}
   @Override public void surfaceChanged(SurfaceHolder holder,int format,int width,int height){}
   @Override public void surfaceDestroyed(SurfaceHolder holder){surfaceReady=false;if(streamer!=null&&!streamer.isStreaming())streamer.stopPreview();}
   @Override public void onConnectionStarted(String url){runOnUiThread(()->state.setText("Connecting…"));}
-  @Override public void onConnectionSuccess(){runOnUiThread(()->state.setText("LIVE · Connected"));}
+  @Override public void onConnectionSuccess(){
+    runOnUiThread(()->state.setText("LIVE · Connected"));
+    if(!streamId.isEmpty())io.execute(()->{
+      try{
+        JSONObject row=new JSONObject();row.put("status","live");row.put("started_at",utcNow());
+        String playback=playbackUrl.getText().toString().trim();
+        if(playback.startsWith("https://")||playback.startsWith("http://"))row.put("playback_url",playback);
+        api.request("PATCH","/rest/v1/live_streams?id=eq."+streamId,row,"return=minimal");
+      }catch(Exception ex){runOnUiThread(()->state.setText("Streaming connected, but live status could not be saved: "+ex.getMessage()));}
+    });
+  }
+  private String utcNow(){
+    java.text.SimpleDateFormat f=new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",java.util.Locale.US);
+    f.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));return f.format(new java.util.Date());
+  }
   @Override public void onConnectionFailed(String reason){runOnUiThread(()->{state.setText("Broadcast failed: "+reason);start.setText("Start broadcast");});}
   @Override public void onDisconnect(){runOnUiThread(()->{state.setText("Disconnected");start.setText("Start broadcast");});}
   @Override public void onAuthError(){runOnUiThread(()->{state.setText("Streaming authentication failed");start.setText("Start broadcast");});}
