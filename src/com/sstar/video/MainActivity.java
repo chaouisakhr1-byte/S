@@ -38,25 +38,30 @@ public class MainActivity extends Activity {
   void showHome(){base("S ☆   ·   Discover");bar=new LinearLayout(this);bar.setOrientation(0);Button feed=button("Feed"),upload=button("Upload"),live=button("Live"),profile=button("Profile"),account=button(api.accessToken.isEmpty()?"Sign in":"Sign out");bar.addView(feed,new LinearLayout.LayoutParams(0,-2,1));bar.addView(upload,new LinearLayout.LayoutParams(0,-2,1));bar.addView(live,new LinearLayout.LayoutParams(0,-2,1));bar.addView(profile,new LinearLayout.LayoutParams(0,-2,1));bar.addView(account,new LinearLayout.LayoutParams(0,-2,1));root.addView(bar);status=text("Public videos · Browse without signing in",14,dark);root.addView(status);feed.setOnClickListener(v->loadFeed());upload.setOnClickListener(v->{if(requireAuth())pickVideo();});live.setOnClickListener(v->{if(requireAuth())startActivity(new Intent(this,LiveHubActivity.class));});profile.setOnClickListener(v->{if(requireAuth())showProfile();});account.setOnClickListener(v->{if(api.accessToken.isEmpty())showAuth();else{api.logout();showHome();}});loadFeed();}
   void loadFeed(){status.setText("Loading feed…");io.execute(()->{try{
     JSONObject r=api.request("GET","/rest/v1/videos?select=id,owner_id,title,description,video_url,created_at&visibility=eq.public&order=created_at.desc&limit=50",null,null);
-    videos=r.optJSONArray("data");if(videos==null)videos=new JSONArray();creatorNames.clear();
-    java.util.LinkedHashSet<String> ids=new java.util.LinkedHashSet<>();
-    for(int i=0;i<videos.length();i++){JSONObject item=videos.optJSONObject(i);if(item!=null){String id=item.optString("owner_id","");if(!id.isEmpty())ids.add(id);}}
-    if(!ids.isEmpty()&&!api.userId.isEmpty()){
-      StringBuilder filter=new StringBuilder();for(String id:ids){if(filter.length()>0)filter.append(",");filter.append(id);}
+    videos=r.optJSONArray("data");if(videos==null)videos=new JSONArray();
+    creatorNames.clear();likedVideoIds.clear();followedCreatorIds.clear();
+    java.util.LinkedHashSet<String> owners=new java.util.LinkedHashSet<>(), videoIds=new java.util.LinkedHashSet<>();
+    for(int i=0;i<videos.length();i++){
+      JSONObject item=videos.optJSONObject(i);if(item==null)continue;
+      String owner=item.optString("owner_id",""),vid=item.optString("id","");
+      if(!owner.isEmpty())owners.add(owner);if(!vid.isEmpty())videoIds.add(vid);
+    }
+    if(!videoIds.isEmpty()&&!api.userId.isEmpty()){
+      StringBuilder filter=new StringBuilder();for(String id:videoIds){if(filter.length()>0)filter.append(",");filter.append(id);}
       try{
         JSONObject likes=api.request("GET","/rest/v1/video_likes?select=video_id&user_id=eq."+api.userId+"&video_id=in.("+filter+")",null,null);
         JSONArray rows=likes.optJSONArray("data");if(rows!=null)for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null)likedVideoIds.add(row.optString("video_id",""));}
       }catch(Exception ignored){}
     }
-    if(!ids.isEmpty()&&!api.userId.isEmpty()){
-      StringBuilder owners=new StringBuilder();for(String id:ids){if(owners.length()>0)owners.append(",");owners.append(id);}
+    if(!owners.isEmpty()&&!api.userId.isEmpty()){
+      StringBuilder filter=new StringBuilder();for(String id:owners){if(filter.length()>0)filter.append(",");filter.append(id);}
       try{
-        JSONObject follows=api.request("GET","/rest/v1/follows?select=followed_id&follower_id=eq."+api.userId+"&followed_id=in.("+owners+")",null,null);
+        JSONObject follows=api.request("GET","/rest/v1/follows?select=followed_id&follower_id=eq."+api.userId+"&followed_id=in.("+filter+")",null,null);
         JSONArray rows=follows.optJSONArray("data");if(rows!=null)for(int i=0;i<rows.length();i++){JSONObject row=rows.optJSONObject(i);if(row!=null)followedCreatorIds.add(row.optString("followed_id",""));}
       }catch(Exception ignored){}
     }
-    if(!ids.isEmpty()){
-      StringBuilder filter=new StringBuilder();for(String id:ids){if(filter.length()>0)filter.append(",");filter.append(id);}
+    if(!owners.isEmpty()){
+      StringBuilder filter=new StringBuilder();for(String id:owners){if(filter.length()>0)filter.append(",");filter.append(id);}
       try{
         JSONObject profiles=api.request("GET","/rest/v1/profiles?select=id,username,display_name&id=in.("+filter+")",null,null);
         JSONArray rows=profiles.optJSONArray("data");if(rows!=null)for(int i=0;i<rows.length();i++){
@@ -79,7 +84,6 @@ public class MainActivity extends Activity {
     if(mime!=null&&!mime.equals("video/mp4")&&!mime.equals("video/quicktime")&&!mime.equals("video/webm")&&!mime.equals("video/3gpp")&&!mime.equals("video/x-m4v")){new AlertDialog.Builder(this).setTitle("Unsupported video format").setMessage("Supported formats: MP4, QuickTime, WebM, 3GPP and M4V.").setPositiveButton("OK",null).show();return;}
     final EditText title=new EditText(this);title.setHint("Video title");new AlertDialog.Builder(this).setTitle("Name your video").setMessage(size>0?"File size: "+(size/(1024*1024))+" MiB · Maximum 50 MiB":"Maximum upload size: 50 MiB").setView(title).setNegativeButton("Cancel",null).setPositiveButton("Upload",(d,w)->{String name=title.getText().toString().trim();if(name.isEmpty())name=displayName(uri);final String t=name;status.setText("Uploading…");io.execute(()->{try{String path=api.userId+"/"+System.currentTimeMillis()+"_"+displayName(uri).replaceAll("[^A-Za-z0-9._-]","_");String publicUrl=api.upload(path,uri);JSONObject row=new JSONObject();row.put("owner_id",api.userId);row.put("title",t);row.put("description","");row.put("video_url",publicUrl);row.put("visibility","public");api.request("POST","/rest/v1/videos",row,"return=minimal");runOnUiThread(()->{status.setText("Upload complete");loadFeed();});}catch(Exception e){runOnUiThread(()->status.setText("Upload failed: "+e.getMessage()));}});}).show();}
   void showComments(String videoId){
-    if(!requireAuth())return;
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);
     TextView messages=text("Loading comments…",14,dark);
     ScrollView scroll=new ScrollView(this);scroll.addView(messages);
@@ -102,6 +106,7 @@ public class MainActivity extends Activity {
     });
     dialog.setOnShowListener(x->dialog.getButton(-1).setOnClickListener(v->{
       String body=input.getText().toString().trim();if(body.isEmpty())return;
+      if(!requireAuth())return;
       input.setText("");
       io.execute(()->{
         try{
