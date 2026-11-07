@@ -59,7 +59,7 @@ public final class LiveHubActivity extends Activity {
     notice.setText("Loading live broadcasts…");
     io.execute(() -> {
       try {
-        JSONObject result=api.request("GET","/rest/v1/live_streams?select=id,host_id,title,description,status,playback_url,started_at&status=eq.live&order=started_at.desc&limit=50",null,null);
+        JSONObject result=api.request("GET","/rest/v1/live_streams?select=id,host_id,title,description,status,playback_url,started_at,created_at&or=(status.eq.live,host_id.eq."+api.userId+")&order=created_at.desc&limit=50",null,null);
         JSONArray rows=result.optJSONArray("data");
         runOnUiThread(() -> render(rows==null?new JSONArray():rows));
       } catch(Exception e) { runOnUiThread(() -> notice.setText("Could not load live broadcasts: "+e.getMessage())); }
@@ -68,8 +68,8 @@ public final class LiveHubActivity extends Activity {
 
   private void render(JSONArray rows) {
     list.removeAllViews();
-    notice.setText(rows.length()+" live broadcast(s)");
-    if(rows.length()==0) list.addView(label("No one is live right now. Start the first broadcast.",16,DARK));
+    notice.setText(rows.length()+" live / scheduled broadcast(s)");
+    if(rows.length()==0) list.addView(label("No live broadcasts yet. Start the first broadcast.",16,DARK));
     for(int i=0;i<rows.length();i++) {
       JSONObject row=rows.optJSONObject(i); if(row==null) continue;
       String id=row.optString("id","");
@@ -78,15 +78,25 @@ public final class LiveHubActivity extends Activity {
       LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
       card.setPadding(14,12,14,12); card.setBackgroundColor(Color.WHITE);
       LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2); cp.bottomMargin=14; list.addView(card,cp);
-      TextView live=label("● LIVE",12,Color.rgb(205,35,65)); card.addView(live);
+      String status=row.optString("status","live");
+      boolean mine=!host.isEmpty()&&host.equals(api.userId);
+      boolean liveNow="live".equals(status);
+      TextView badge=label(liveNow?"● LIVE":"◷ SCHEDULED",12,liveNow?Color.rgb(205,35,65):PURPLE); card.addView(badge);
       card.addView(label(title,19,DARK));
-      card.addView(label("Host: "+host,12,Color.DKGRAY));
-      LinearLayout buttons=new LinearLayout(this);
-      Button chat=new Button(this); chat.setText("Open live chat");
-      buttons.addView(chat,new LinearLayout.LayoutParams(-1,-2,1)); card.addView(buttons);
-      chat.setOnClickListener(v -> openChat(id,title));
+      card.addView(label(mine?"Your broadcast":"Host: "+host,12,Color.DKGRAY));
+      if(liveNow){
+        Button chat=new Button(this); chat.setText("Open live chat"); card.addView(chat);
+        chat.setOnClickListener(v -> openChat(id,title));
+      }
+      if(mine&&!liveNow){
+        Button resume=new Button(this); resume.setText("Continue studio"); card.addView(resume);
+        resume.setOnClickListener(v -> {
+          Intent intent=new Intent(this,LiveBroadcastActivity.class);
+          intent.putExtra("stream_id",id); intent.putExtra("stream_title",title); startActivity(intent);
+        });
+      }
       String playback=row.optString("playback_url","");
-      if(playback.startsWith("https://")||playback.startsWith("http://")) {
+      if(liveNow&&(playback.startsWith("https://")||playback.startsWith("http://"))) {
         Button watch=new Button(this); watch.setText("Watch stream"); card.addView(watch);
         watch.setOnClickListener(v -> {
           Intent intent=new Intent(this,VideoPlaybackActivity.class);
@@ -125,6 +135,7 @@ public final class LiveHubActivity extends Activity {
     ScrollView scroll=new ScrollView(this); scroll.addView(messages);
     panel.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
     EditText input=new EditText(this); input.setHint("Write a message");
+    if(api.accessToken.isEmpty()){input.setEnabled(false);input.setHint("Sign in to send messages");}
     panel.addView(input);
     AlertDialog dialog=new AlertDialog.Builder(this).setTitle(title+" · Chat").setView(panel)
       .setNegativeButton("Close",null).setPositiveButton("Send",null).create();
