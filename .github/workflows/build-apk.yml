@@ -47,6 +47,15 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
+      - name: Build debug Android App Bundle
+        run: gradle --no-daemon :app:bundleDebug
+
+      - name: Verify debug App Bundle
+        run: |
+          AAB="app/build/outputs/bundle/debug/app-debug.aab"
+          test -s "$AAB"
+          jarsigner -verify "$AAB"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -60,9 +69,9 @@ jobs:
           PKG="$RUNNER_TEMP/S-delivery"
           mkdir -p "$PKG/S/build-artifacts"
           tar --exclude='./.git' --exclude='./.gradle' --exclude='./build' --exclude='./app/build' -cf - . | tar -C "$PKG/S" -xf -
-          cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"\n          cp app/build/outputs/bundle/debug/app-debug.aab "$PKG/S/build-artifacts/S-debug.aab"
           git bundle create "$PKG/S/S-source-history.bundle" --all
-          sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
+          sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/build-artifacts/S-debug.aab" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
           cat > "$PKG/S/DELIVERY-README.md" <<'EOF'
           # S project handoff
           This archive contains the complete tracked project source, Git history bundle, and the verified debug APK from this workflow run.
