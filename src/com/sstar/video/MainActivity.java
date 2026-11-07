@@ -59,7 +59,7 @@ public class MainActivity extends Activity {
           JSONObject row=rows.optJSONObject(i);if(row==null)continue;
           String uid=row.optString("user_id","user");
           out.append(uid.substring(0,Math.min(8,uid.length()))).append(": ")
-            .append(row.optString("body","")).append("\\n\\n");
+            .append(row.optString("body","")).append("\n\n");
         }
         runOnUiThread(()->messages.setText(out.length()==0?"No comments yet. Be the first to comment.":out.toString()));
       }catch(Exception ex){runOnUiThread(()->messages.setText("Could not load comments: "+ex.getMessage()));}
