@@ -1,28 +1,50 @@
 # S ☆ — Native Android application
 
-Existing application identity is preserved:
-- Package / application ID: `com.sstar.video`
+## Project identity
 - Repository: `chaouisakhr1-byte/S`
-- Backend: the existing Supabase project configured in `Supabase.java`
+- Android package / application ID: `com.sstar.video`
+- Supabase project: existing project configured in `src/com/sstar/video/Supabase.java`
+- Development continues in this repository and on `main`; no replacement project is used.
 
-## Android build
+## Implemented in the current source
+- Email/password Supabase sign-up and sign-in, including the email-confirmation response.
+- Persisted access/refresh tokens and refresh-token renewal after an expired access token.
+- Public video feed and local video selection.
+- Upload to the existing public `s-media` bucket (currently limited to 50 MiB and its configured video MIME types).
+- Public video playback.
+- Read and post comments on public videos.
+- Video likes and creator follows.
+- Profile loading and saving.
+- Live Hub listing of public live sessions and the signed-in host's scheduled sessions.
+- Resume a host's scheduled studio session.
+- RTMP/RTMPS camera publishing through RootEncoder 2.8.1, with camera/microphone runtime permission handling.
+- Live chat with periodic REST polling and message posting.
+- Optional HTTP(S) HLS playback URL for viewers when the broadcaster has a compatible playback endpoint.
 
-The primary build is now the Android Gradle Plugin build in `app/`. Java sources remain in the existing `src/` tree, and the existing root `AndroidManifest.xml` and `res/` are used by the app module.
+## Backend and access controls checked
+- Public schema tables have Row Level Security enabled.
+- Supabase security advisor returned no security lint findings during the latest check.
+- Storage bucket `s-media` is public, accepts configured video MIME types, and has a 50 MiB upload limit.
+- Storage upload/delete policies restrict each authenticated user to their own UID folder.
+- This Android client uses the publishable key only; never add a service-role key to the app.
 
-GitHub Actions builds `:app:assembleDebug` and uploads `app-debug.apk`.
+## Build and artifacts
+GitHub Actions runs:
+- `:app:assembleDebug` and APK signature verification.
+- `:app:bundleDebug` and AAB signature verification.
+- A complete source ZIP containing the project files, APK, debug AAB, Git bundle and SHA-256 manifest.
 
-## Current application areas
+The APK/AAB from this workflow are **debug-signed test artifacts**, not Play Store release artifacts.
 
-- Supabase email/password authentication and persisted session.
-- Public video discovery is available before sign-in; authentication is required for protected actions.\n- Public video feed, local video picker, Supabase Storage upload and playback.
-- Video comments.
-- Creator follow and video likes using existing Supabase tables.
-- Profile editor.
-- Live Hub with live-session discovery, session creation, and a native RTMP publisher entry.\n- Live chat UI with message sending and periodic refresh against `live_chat_messages`.\n- Dedicated HTTP(S) video playback screen.
-- RTMP camera publisher screen implemented with RootEncoder 2.8.1. It requests camera/microphone permission and publishes to a user-provided RTMP/RTMPS URL.
+## Remaining work / not yet verified
+- Real installation and interaction tests on physical Android devices.
+- Real backend end-to-end tests with a test account (email confirmation, profile, upload, likes, follows, comments).
+- RTMP ingest and viewer playback against an actual media server; the app currently accepts an externally supplied RTMP publish URL and optional HLS playback URL.
+- Multi-guest WebRTC rooms.
+- Managed media server, adaptive transcoding, recording and replay.
+- Native Supabase Realtime subscriptions (chat currently polls REST).
+- Push notifications and moderation/reporting tools.
+- YouTube/Facebook/X OAuth account linking and compliant platform publishing integrations.
+- Production release keystore and Play Store AAB.
 
-## Important verification status
-
-A successful CI build proves compilation and APK packaging only. It does not prove camera compatibility on every phone, a successful connection to a real RTMP server, database policy compatibility, or production readiness. These require installation and live device/backend tests.
-
-The RTMP screen is a direct publisher to a user-provided RTMP/RTMPS ingest URL. The current implementation does not yet provide a managed media server, automatic YouTube/Facebook account integration, multi-guest WebRTC rooms, adaptive playback/transcoding, or a full broadcast compositor. Live chat uses periodic REST refresh in this Java MVP; it is not yet a native Supabase Realtime subscription.
+A successful GitHub Actions run confirms compilation, packaging, signature checks and artifact creation. It does not prove the runtime features above.
