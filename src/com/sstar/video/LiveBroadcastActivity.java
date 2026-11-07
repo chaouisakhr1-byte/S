@@ -63,7 +63,7 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
   }
   private void startOrStop(){
     if(streamer==null){ensurePermissions();return;}
-    if(streamer.isStreaming()){streamer.stopStream();start.setText("Start broadcast");state.setText("Broadcast stopped");return;}
+    if(streamer.isStreaming()){endLive();return;}
     String url=streamUrl.getText().toString().trim();
     if(!url.startsWith("rtmp://")&&!url.startsWith("rtmps://")){state.setText("Enter a valid RTMP or RTMPS publishing URL.");return;}
     if(!streamer.isOnPreview())streamer.startPreview(); streamer.startStream(url); start.setText("Stop broadcast");state.setText("Connecting to streaming server…");
@@ -96,14 +96,18 @@ public final class LiveBroadcastActivity extends Activity implements ConnectChec
   @Override public void surfaceDestroyed(SurfaceHolder holder){surfaceReady=false;if(streamer!=null&&!streamer.isStreaming())streamer.stopPreview();}
   @Override public void onConnectionStarted(String url){runOnUiThread(()->state.setText("Connecting…"));}
   @Override public void onConnectionSuccess(){
-    runOnUiThread(()->state.setText("LIVE · Connected"));
-    if(!streamId.isEmpty())io.execute(()->{
-      try{
-        JSONObject row=new JSONObject();row.put("status","live");row.put("started_at",utcNow());
+    runOnUiThread(()->{
+      state.setText("LIVE · Connected");
+      if(!streamId.isEmpty()){
         String playback=playbackUrl.getText().toString().trim();
-        if(playback.startsWith("https://")||playback.startsWith("http://"))row.put("playback_url",playback);
-        api.request("PATCH","/rest/v1/live_streams?id=eq."+streamId,row,"return=minimal");
-      }catch(Exception ex){runOnUiThread(()->state.setText("Streaming connected, but live status could not be saved: "+ex.getMessage()));}
+        io.execute(()->{
+          try{
+            JSONObject row=new JSONObject();row.put("status","live");row.put("started_at",utcNow());
+            if(playback.startsWith("https://")||playback.startsWith("http://"))row.put("playback_url",playback);
+            api.request("PATCH","/rest/v1/live_streams?id=eq."+streamId,row,"return=minimal");
+          }catch(Exception ex){runOnUiThread(()->state.setText("Streaming connected, but live status could not be saved: "+ex.getMessage()));}
+        });
+      }
     });
   }
   private String utcNow(){
