@@ -69,7 +69,8 @@ jobs:
           PKG="$RUNNER_TEMP/S-delivery"
           mkdir -p "$PKG/S/build-artifacts"
           tar --exclude='./.git' --exclude='./.gradle' --exclude='./build' --exclude='./app/build' -cf - . | tar -C "$PKG/S" -xf -
-          cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"\n          cp app/build/outputs/bundle/debug/app-debug.aab "$PKG/S/build-artifacts/S-debug.aab"
+          cp app/build/outputs/apk/debug/app-debug.apk "$PKG/S/build-artifacts/S-debug.apk"
+          cp app/build/outputs/bundle/debug/app-debug.aab "$PKG/S/build-artifacts/S-debug.aab"
           git bundle create "$PKG/S/S-source-history.bundle" --all
           sha256sum "$PKG/S/build-artifacts/S-debug.apk" "$PKG/S/build-artifacts/S-debug.aab" "$PKG/S/S-source-history.bundle" > "$PKG/S/SHA256SUMS"
           cat > "$PKG/S/DELIVERY-README.md" <<'EOF'
